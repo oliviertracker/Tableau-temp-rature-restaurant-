@@ -1,1 +1,154 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Suivi Températures Pro</title>
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+   <style>
+       :root { --primary: #2563eb; --bg: #f8fafc; --text: #1e293b; }
+       body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 20px; }
+       .container { max-width: 1000px; margin: auto; background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+       h1 { color: var(--primary); border-bottom: 2px solid var(--bg); padding-bottom: 10px; }
+       .inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 20px; background: #f1f5f9; padding: 15px; border-radius: 8px; }
+       input, button { padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; }
+       button { cursor: pointer; transition: 0.2s; font-weight: 600; }
+       .btn-add { background: var(--primary); color: white; border: none; }
+       .btn-add:hover { background: #1d4ed8; }
+       .actions { margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap; }
+       .btn-export { background: #10b981; color: white; border: none; }
+       table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+       th, td { border: 1px solid #e2e8f0; padding: 12px; text-align: left; }
+       th { background: #f8fafc; }
+       tr:nth-child(even) { background: #fdfdfd; }
+       .delete-btn { color: #ef4444; cursor: pointer; font-weight: bold; }
+   </style>
+</head>
+<body>
+
+<div class="container">
+   <h1>Thermolog | Suivi des Températures</h1>
+
+   <div class="inputs">
+       <input type="text" id="emplacement" placeholder="Ex: Frigo Bar">
+       <input type="number" id="temp" placeholder="Temp (°C)" step="0.1">
+       <input type="datetime-local" id="date-time">
+       <button class="btn-add" onclick="ajouterEntree()">Enregistrer</button>
+   </div>
+
+   <div class="actions">
+       <button class="btn-export" onclick="exportCSV()">CSV (Excel/Google Sheets)</button>
+       <button class="btn-export" style="background:#ef4444" onclick="exportPDF()">Exporter en PDF</button>
+       <button onclick="copierPourNotion()">Copier pour Notion</button>
+   </div>
+
+   <table id="tempTable">
+       <thead>
+           <tr>
+               <th>Date & Heure</th>
+               <th>Emplacement</th>
+               <th>Température</th>
+               <th>Action</th>
+           </tr>
+       </thead>
+       <tbody id="tableBody"></tbody>
+   </table>
+</div>
+
+<script>
+   // Initialisation de la date actuelle dans l'input
+   document.getElementById('date-time').value = new Date().toISOString().slice(0, 16);
+
+   let logs = JSON.parse(localStorage.getItem('tempLogs')) || [];
+
+   function ajouterEntree() {
+       const emplacement = document.getElementById('emplacement').value;
+       const temp = document.getElementById('temp').value;
+       const dateTime = document.getElementById('date-time').value;
+
+       if(!emplacement || !temp || !dateTime) return alert("Remplissez tous les champs");
+
+       const data = { id: Date.now(), emplacement, temp, dateTime };
+       logs.push(data);
+       sauvegarder();
+       afficherLogs();
+   }
+
+   function sauvegarder() {
+       localStorage.setItem('tempLogs', JSON.stringify(logs));
+   }
+
+   function supprimer(id) {
+       logs = logs.filter(log => log.id !== id);
+       sauvegarder();
+       afficherLogs();
+   }
+
+   function afficherLogs() {
+       const tbody = document.getElementById('tableBody');
+       tbody.innerHTML = '';
+
+       // Tri par date décroissante
+       logs.sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
+
+       logs.forEach(log => {
+           const row = `<tr>
+               <td>${new Date(log.dateTime).toLocaleString('fr-FR')}</td>
+               <td>${log.emplacement}</td>
+               <td>${log.temp}°C</td>
+               <td class="delete-btn" onclick="supprimer(${log.id})">Supprimer</td>
+           </tr>`;
+           tbody.innerHTML += row;
+       });
+   }
+
+   // Export CSV pour Google Sheets
+   function exportCSV() {
+       let csv = "Date;Emplacement;Temperature\n";
+       logs.forEach(log => {
+           csv += `${log.dateTime};${log.emplacement};${log.temp}\n`;
+       });
+       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+       const link = document.createElement("a");
+       link.href = URL.createObjectURL(blob);
+       link.download = "releve_temperatures.csv";
+       link.click();
+   }
+
+   // Export PDF
+   function exportPDF() {
+       const { jsPDF } = window.jspdf;
+       const doc = new jsPDF();
+       doc.text("Rapport de Températures", 14, 15);
+
+       const rows = logs.map(log => [
+           new Date(log.dateTime).toLocaleString('fr-FR'),
+           log.emplacement,
+           log.temp + "°C"
+       ]);
+
+       doc.autoTable({
+           head: [['Date/Heure', 'Emplacement', 'Température']],
+           body: rows,
+           startY: 25
+       });
+       doc.save("releve_temperatures.pdf");
+   }
+
+   // Copier pour Notion (Format Markdown)
+   function copierPourNotion() {
+       let md = "| Date | Emplacement | Temp |\n| --- | --- | --- |\n";
+       logs.forEach(log => {
+           md += `| ${log.dateTime} | ${log.emplacement} | ${log.temp}°C |\n`;
+       });
+       navigator.clipboard.writeText(md);
+       alert("Tableau copié au format Markdown ! Collez-le simplement dans Notion.");
+   }
+
+   afficherLogs();
+</script>
+
+</body>
+</html>
 
