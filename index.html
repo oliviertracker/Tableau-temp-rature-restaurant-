@@ -1,1 +1,227 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suivi Température Pro</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --secondary: #34495e;
+            --accent: #3498db;
+            --bg: #f4f7f6;
+            --text: #333;
+            --white: #ffffff;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: var(--white);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        h1 { color: var(--primary); text-align: center; margin-bottom: 30px; }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        .btn-add { background-color: var(--accent); color: white; }
+        .btn-export { background-color: #27ae60; color: white; }
+        .btn-pdf { background-color: #e74c3c; color: white; }
+        .btn-remove { background-color: transparent; border: 1px solid #ddd; cursor: pointer; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            padding: 12px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+
+        th { background-color: var(--primary); color: white; }
+
+        input {
+            width: 90%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .summary-section {
+            margin-top: 40px;
+            padding: 20px;
+            background: #ecf0f1;
+            border-radius: 8px;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 15px;
+        }
+
+        .summary-card {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        @media print {
+            .controls, .btn-remove { display: none; }
+            .container { box-shadow: none; width: 100%; max-width: none; padding: 0; }
+            body { background-color: white; }
+            input { border: none; background: transparent; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Thermolab : Suivi des Températures</h1>
+    
+    <div class="controls">
+        <button class="btn-add" onclick="addRow()">+ Ajouter un relevé</button>
+        <button class="btn-export" onclick="exportCSV()">Exporter pour Google Sheets</button>
+        <button class="btn-pdf" onclick="window.print()">Enregistrer en PDF</button>
+    </div>
+
+    <table id="tempTable">
+        <thead>
+            <tr>
+                <th>Équipement</th>
+                <th>Temp. (°C)</th>
+                <th>Date</th>
+                <th>Heure</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><input type="text" placeholder="ex: Frigo Cuisine" class="eq-name"></td>
+                <td><input type="number" step="0.1" placeholder="4.0" class="temp-val" oninput="updateSummary()"></td>
+                <td><input type="date" class="date-val" oninput="updateSummary()"></td>
+                <td><input type="time" class="time-val"></td>
+                <td><button class="btn-remove" onclick="removeRow(this)">🗑️</button></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="summary-section">
+        <h2>Résumés des moyennes</h2>
+        <div class="summary-grid">
+            <div class="summary-card"><strong>Journée :</strong> <span id="avgDay">-</span> °C</div>
+            <div class="summary-card"><strong>Semaine :</strong> <span id="avgWeek">-</span> °C</div>
+            <div class="summary-card"><strong>Mois :</strong> <span id="avgMonth">-</span> °C</div>
+            <div class="summary-card"><strong>Année :</strong> <span id="avgYear">-</span> °C</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Initialise la première ligne avec la date/heure actuelle
+    window.onload = () => {
+        const now = new Date();
+        document.querySelector('.date-val').value = now.toISOString().split('T')[0];
+        document.querySelector('.time-val').value = now.toTimeString().split(' ')[0].substring(0, 5);
+    };
+
+    function addRow() {
+        const table = document.getElementById('tempTable').getElementsByTagName('tbody')[0];
+        const newRow = table.insertRow();
+        const now = new Date();
+        const date = now.toISOString().split('T')[0];
+        const time = now.toTimeString().split(' ')[0].substring(0, 5);
+
+        newRow.innerHTML = `
+            <td><input type="text" placeholder="Équipement" class="eq-name"></td>
+            <td><input type="number" step="0.1" placeholder="0.0" class="temp-val" oninput="updateSummary()"></td>
+            <td><input type="date" value="${date}" class="date-val" oninput="updateSummary()"></td>
+            <td><input type="time" value="${time}" class="time-val"></td>
+            <td><button class="btn-remove" onclick="removeRow(this)">🗑️</button></td>
+        `;
+    }
+
+    function removeRow(btn) {
+        btn.parentElement.parentElement.remove();
+        updateSummary();
+    }
+
+    function updateSummary() {
+        const rows = document.querySelectorAll('#tempTable tbody tr');
+        let data = [];
+        const now = new Date();
+
+        rows.forEach(row => {
+            const val = parseFloat(row.querySelector('.temp-val').value);
+            const dateStr = row.querySelector('.date-val').value;
+            if (!isNaN(val) && dateStr) {
+                const date = new Date(dateStr);
+                data.push({ val, date });
+            }
+        });
+
+        const getAvg = (filtered) => {
+            if (filtered.length === 0) return "-";
+            const sum = filtered.reduce((a, b) => a + b.val, 0);
+            return (sum / filtered.length).toFixed(1);
+        };
+
+        const msInDay = 24 * 60 * 60 * 1000;
+        document.getElementById('avgDay').innerText = getAvg(data.filter(d => (now - d.date) <= msInDay));
+        document.getElementById('avgWeek').innerText = getAvg(data.filter(d => (now - d.date) <= msInDay * 7));
+        document.getElementById('avgMonth').innerText = getAvg(data.filter(d => (now - d.date) <= msInDay * 30));
+        document.getElementById('avgYear').innerText = getAvg(data.filter(d => (now - d.date) <= msInDay * 365));
+    }
+
+    function exportCSV() {
+        let csv = "Equipement;Temperature;Date;Heure\n";
+        const rows = document.querySelectorAll('#tempTable tbody tr');
+        rows.forEach(row => {
+            const eq = row.querySelector('.eq-name').value || "Inconnu";
+            const temp = row.querySelector('.temp-val').value || "0";
+            const date = row.querySelector('.date-val').value || "";
+            const time = row.querySelector('.time-val').value || "";
+            csv += `${eq};${temp};${date};${time}\n`;
+        });
+
+        const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "releves_temperatures.csv";
+        link.click();
+    }
+</script>
+
+</body>
+</html>
 
